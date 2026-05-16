@@ -1,0 +1,3097 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>工地考勤系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        :root {
+            --primary: #ff6b00;
+            --primary-dark: #e55a00;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --info: #3b82f6;
+            --warning: #f59e0b;
+            --bg: #f5f5f5;
+            --card-bg: #ffffff;
+            --text: #1a1a1a;
+            --text-secondary: #666666;
+            --border: #e0e0e0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 16px;
+            line-height: 1.5;
+            padding-bottom: 70px;
+        }
+        
+        /* Header */
+        .header {
+            background: var(--primary);
+            color: white;
+            padding: 12px 15px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .sync-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            background: rgba(255,255,255,0.2);
+            padding: 4px 10px;
+            border-radius: 20px;
+        }
+        
+        .sync-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #9ca3af;
+        }
+        
+        .sync-dot.connected { background: var(--success); }
+        .sync-dot.connecting { 
+            background: var(--warning); 
+            animation: pulse 1s infinite;
+        }
+        .sync-dot.error { background: var(--danger); }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .spinner {
+            animation: spin 1s linear infinite;
+        }
+        
+        /* Tab Content */
+        .tab-content {
+            display: none;
+            padding: 12px;
+            min-height: calc(100vh - 140px);
+        }
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* Cards */
+        .card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        
+        .card-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .section-divider {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 20px 0 15px;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+        
+        .section-divider::before,
+        .section-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+        
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        
+        .form-input, .form-select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-size: 16px;
+            background: white;
+            transition: border-color 0.2s;
+        }
+        
+        .form-input:focus, .form-select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        
+        /* Buttons */
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.1s, opacity 0.2s;
+            min-height: 44px;
+            touch-action: manipulation;
+        }
+        
+        .btn:active {
+            transform: scale(0.96);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+        
+        .btn-info {
+            background: var(--info);
+            color: white;
+        }
+        
+        .btn-outline {
+            background: white;
+            border: 2px solid var(--border);
+            color: var(--text);
+        }
+        
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+        }
+        
+        .btn-sm {
+            padding: 8px 14px;
+            font-size: 14px;
+            min-height: 36px;
+        }
+        
+        .btn-block {
+            width: 100%;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        /* Status Buttons */
+        .status-btn {
+            padding: 10px 16px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            background: white;
+            font-size: 15px;
+            min-width: 70px;
+            min-height: 44px;
+            cursor: pointer;
+            transition: all 0.15s;
+            touch-action: manipulation;
+        }
+        
+        .status-btn:active {
+            transform: scale(0.95);
+        }
+        
+        .status-btn.present {
+            border-color: var(--success);
+            color: var(--success);
+        }
+        .status-btn.present.active {
+            background: var(--success);
+            color: white;
+        }
+        
+        .status-btn.absent {
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+        .status-btn.absent.active {
+            background: var(--danger);
+            color: white;
+        }
+        
+        .status-btn.leave {
+            border-color: var(--info);
+            color: var(--info);
+        }
+        .status-btn.leave.active {
+            background: var(--info);
+            color: white;
+        }
+        
+        /* Worker Row */
+        .worker-row {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid var(--primary);
+        }
+        
+        .worker-info {
+            flex: 1;
+        }
+        
+        .worker-name {
+            font-size: 17px;
+            font-weight: bold;
+        }
+        
+        .worker-wage {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        
+        .worker-status {
+            font-size: 13px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        
+        .worker-status.present { background: #dcfce7; color: var(--success); }
+        .worker-status.absent { background: #fee2e2; color: var(--danger); }
+        .worker-status.leave { background: #dbeafe; color: var(--info); }
+        
+        /* Check In/Out Time */
+        .time-input {
+            width: 80px;
+            padding: 6px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .time-display {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+        
+        /* Stats */
+        .stats-bar {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+        
+        /* Table */
+        .table-wrapper {
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        
+        .data-table th {
+            background: var(--primary);
+            color: white;
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        
+        .data-table td {
+            padding: 12px 8px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .data-table tr:nth-child(even) {
+            background: #fafafa;
+        }
+        
+        .data-table tr:hover {
+            background: #fff7ed;
+        }
+        
+        .money {
+            color: var(--danger);
+            font-weight: bold;
+        }
+        
+        /* Site Card */
+        .site-card {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 12px;
+            border-left: 5px solid var(--primary);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        
+        .site-card.completed {
+            border-left-color: #9ca3af;
+            opacity: 0.8;
+        }
+        
+        .site-name {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .site-address {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+        }
+        
+        .site-stats {
+            display: flex;
+            gap: 15px;
+            font-size: 13px;
+        }
+        
+        .site-stat {
+            background: #f5f5f5;
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .status-badge.active {
+            background: #dcfce7;
+            color: var(--success);
+        }
+        
+        .status-badge.completed {
+            background: #e5e5e5;
+            color: #666;
+        }
+        
+        /* Bottom Navigation */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            display: flex;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            z-index: 100;
+        }
+        
+        .nav-item {
+            flex: 1;
+            padding: 12px 5px;
+            text-align: center;
+            cursor: pointer;
+            transition: background 0.2s;
+            border: none;
+            background: none;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        
+        .nav-item:active {
+            background: #fff7ed;
+        }
+        
+        .nav-item.active {
+            color: var(--primary);
+        }
+        
+        .nav-item.active .nav-icon {
+            color: var(--primary);
+        }
+        
+        .nav-icon {
+            display: block;
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+        
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+            padding: 15px;
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+        }
+        
+        .modal {
+            background: white;
+            border-radius: 15px;
+            width: 100%;
+            max-width: 400px;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: slideUp 0.3s ease;
+        }
+        
+        @keyframes slideUp {
+            from { transform: translateY(50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        .modal-header {
+            padding: 15px;
+            border-bottom: 1px solid var(--border);
+            font-size: 18px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            padding: 0;
+            width: 30px;
+            height: 30px;
+        }
+        
+        .modal-body {
+            padding: 15px;
+        }
+        
+        .modal-footer {
+            padding: 15px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+        }
+        
+        /* Transfer History */
+        .transfer-item {
+            background: #fff7ed;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        
+        .transfer-date {
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
+        }
+        
+        .empty-state .icon {
+            font-size: 60px;
+            margin-bottom: 15px;
+        }
+        
+        /* Utility */
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .mt-10 { margin-top: 10px; }
+        .mt-15 { margin-top: 15px; }
+        .mb-10 { margin-bottom: 10px; }
+        .flex { display: flex; }
+        .flex-1 { flex: 1; }
+        .gap-10 { gap: 10px; }
+        .items-center { align-items: center; }
+        
+        /* Month Picker */
+        .month-picker {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .month-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: 2px solid var(--primary);
+            background: white;
+            color: var(--primary);
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .month-btn:active {
+            transform: scale(0.9);
+        }
+        
+        .month-display {
+            font-size: 18px;
+            font-weight: bold;
+            min-width: 120px;
+            text-align: center;
+        }
+        
+        /* Import area */
+        .import-area {
+            width: 100%;
+            min-height: 120px;
+            padding: 12px;
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+        
+        /* Scrollable content */
+        .scrollable {
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+        }
+        
+        /* SQL area */
+        .sql-area {
+            width: 100%;
+            min-height: 200px;
+            padding: 12px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            background: #f8f8f8;
+            resize: vertical;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
+        /* Connection status */
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #9ca3af;
+        }
+        
+        .status-indicator.connected { background: var(--success); }
+        .status-indicator.error { background: var(--danger); }
+        .status-indicator.connecting { 
+            background: var(--warning); 
+            animation: pulse 1s infinite;
+        }
+        
+        /* Last sync time */
+        .last-sync {
+            font-size: 13px;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-top: 10px;
+        }
+        
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 300;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        
+        /* Backup reminder */
+        .backup-reminder {
+            background: #fef3c7;
+            border: 1px solid #fbbf24;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .backup-reminder .icon {
+            font-size: 24px;
+        }
+        
+        .backup-reminder .text {
+            flex: 1;
+        }
+        
+        .backup-reminder .close-btn {
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: #92400e;
+        }
+    </style>
+    
+    <!-- PWA -->
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#FF8C00">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="工地考勤">
+</head>
+<body>
+    <div class="header">
+        🏗️ 工地考勤系统
+        <div class="sync-status" id="sync-status">
+            <span class="sync-dot" id="sync-dot"></span>
+            <span id="sync-text">本地模式</span>
+        </div>
+    </div>
+    
+    <!-- Tab1: 考勤录入 -->
+    <div class="tab-content active" id="tab-attendance">
+        <div class="card">
+            <div class="form-group mb-10">
+                <label class="form-label">选择工地</label>
+                <select class="form-select" id="attendance-site-select">
+                    <option value="">请选择工地...</option>
+                </select>
+            </div>
+            <button class="btn btn-success btn-block" id="btn-all-present">✅ 一键全员出勤</button>
+        </div>
+        
+        <div class="stats-bar" id="attendance-stats">
+            <div class="stat-item">
+                <div class="stat-value" id="stat-present">0</div>
+                <div class="stat-label">出勤</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="stat-absent">0</div>
+                <div class="stat-label">缺勤</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="stat-leave">0</div>
+                <div class="stat-label">请假</div>
+            </div>
+        </div>
+        
+        <div id="attendance-list" class="scrollable"></div>
+    </div>
+    
+    <!-- Tab2: 月度统计 -->
+    <div class="tab-content" id="tab-stats">
+        <div class="card">
+            <div class="form-group mb-10">
+                <label class="form-label">选择工地</label>
+                <select class="form-select" id="stats-site-select">
+                    <option value="">全部工地</option>
+                </select>
+            </div>
+            <div class="month-picker">
+                <button class="month-btn" id="prev-month">◀</button>
+                <div class="month-display" id="month-display">2024-01</div>
+                <button class="month-btn" id="next-month">▶</button>
+            </div>
+            <button class="btn btn-primary btn-block" id="btn-export-csv">📥 导出Word文档</button>
+        </div>
+        
+        <div class="card">
+            <div class="stats-bar" id="month-stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="total-days">0</div>
+                    <div class="stat-label">出勤人次</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="total-wage" style="font-size:20px;">¥0</div>
+                    <div class="stat-label">总工资</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="total-workers">0</div>
+                    <div class="stat-label">人数</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="table-wrapper">
+            <table class="data-table" id="stats-table">
+                <thead>
+                    <tr>
+                        <th>姓名</th>
+                        <th>日工资</th>
+                        <th>出勤天数</th>
+                        <th>应发工资</th>
+                    </tr>
+                </thead>
+                <tbody id="stats-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Tab3: 人员管理 -->
+    <div class="tab-content" id="tab-workers">
+        <div class="card">
+            <div class="btn-group">
+                <button class="btn btn-primary" id="btn-add-worker">➕ 添加工人</button>
+                <button class="btn btn-outline" id="btn-import-workers">📥 批量导入</button>
+            </div>
+        </div>
+        
+        <div id="workers-list" class="scrollable"></div>
+    </div>
+    
+    <!-- Tab4: 工地管理 -->
+    <div class="tab-content" id="tab-sites">
+        <div class="card">
+            <button class="btn btn-primary btn-block" id="btn-add-site">➕ 添加工地</button>
+        </div>
+        
+        <div id="sites-list" class="scrollable"></div>
+    </div>
+    
+    <!-- Tab5: 设置 -->
+    <div class="tab-content" id="tab-settings">
+        <!-- Supabase配置区 -->
+        <div class="card">
+            <div class="card-title">☁️ 云同步设置</div>
+            
+            <div class="form-group">
+                <label class="form-label">Project URL</label>
+                <input type="text" class="form-input" id="supabase-url" placeholder="https://xxx.supabase.co">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Anon Key</label>
+                <input type="text" class="form-input" id="supabase-key" placeholder="eyJhbGciOiJIUzI1NiIs...">
+            </div>
+            
+            <div class="btn-group">
+                <button class="btn btn-primary" id="btn-connect" onclick="syncManager.connect()">🔗 连接</button>
+                <button class="btn btn-outline" id="btn-disconnect" onclick="syncManager.disconnect()">✂️ 断开</button>
+            </div>
+            
+            <div class="connection-status">
+                <span class="status-indicator" id="conn-indicator"></span>
+                <span id="conn-status">未连接</span>
+            </div>
+        </div>
+        
+        <!-- 数据库初始化 -->
+        <div class="card">
+            <div class="card-title">🗄️ 数据库初始化</div>
+            <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
+                首次使用时，请复制下方SQL到Supabase Dashboard的SQL Editor执行
+            </p>
+            <textarea class="sql-area" id="sql-area" readonly></textarea>
+            <button class="btn btn-info btn-block mt-10" id="btn-copy-sql" onclick="copySQL()">📋 复制SQL建表语句</button>
+        </div>
+        
+        <!-- 数据同步 -->
+        <div class="card">
+            <div class="card-title">🔄 数据同步</div>
+            
+            <div class="btn-group mb-10">
+                <button class="btn btn-primary" id="btn-upload" onclick="syncManager.uploadToCloud()">⬆️ 上传到云端</button>
+                <button class="btn btn-info" id="btn-pull" onclick="syncManager.pullFromCloud()">⬇️ 从云端拉取</button>
+            </div>
+            
+            <button class="btn btn-warning btn-block" id="btn-merge" onclick="syncManager.mergeData()">🔀 合并数据</button>
+            
+            <div class="last-sync" id="last-sync-time">最后同步：从未同步</div>
+        </div>
+        
+        <!-- 本地备份 -->
+        <div class="card">
+            <div class="card-title">💾 本地备份</div>
+            
+            <div id="backup-reminder" class="backup-reminder" style="display:none;">
+                <span class="icon">⚠️</span>
+                <div class="text">
+                    <strong>定期备份提醒</strong><br>
+                    <span style="font-size:13px;">建议每周备份一次数据，防止数据丢失</span>
+                </div>
+                <button class="close-btn" onclick="dismissBackupReminder()">×</button>
+            </div>
+            
+            <div class="btn-group mb-10">
+                <button class="btn btn-success" id="btn-export" onclick="exportAllData()">📤 导出全部数据(Word)</button>
+                <button class="btn btn-primary" id="btn-import" onclick="triggerImport()">📥 导入数据(Word)</button>
+            </div>
+            <input type="file" id="import-file" accept=".docx" style="display:none" onchange="handleImportFile(event)">
+            <div class="mt-10">
+                <a href="#" onclick="exportAllDataJSON(); return false;" style="font-size:13px;color:var(--info);">📋 也可导出JSON备份</a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Bottom Navigation -->
+    <div class="bottom-nav">
+        <button class="nav-item active" data-tab="tab-attendance">
+            <span class="nav-icon">📋</span>
+            考勤录入
+        </button>
+        <button class="nav-item" data-tab="tab-stats">
+            <span class="nav-icon">📊</span>
+            月度统计
+        </button>
+        <button class="nav-item" data-tab="tab-workers">
+            <span class="nav-icon">👷</span>
+            人员管理
+        </button>
+        <button class="nav-item" data-tab="tab-sites">
+            <span class="nav-icon">🏗️</span>
+            工地管理
+        </button>
+        <button class="nav-item" data-tab="tab-settings">
+            <span class="nav-icon">⚙️</span>
+            设置
+        </button>
+    </div>
+    
+    <!-- Modal: 添加/编辑工人 -->
+    <div class="modal-overlay" id="modal-worker">
+        <div class="modal">
+            <div class="modal-header">
+                <span id="modal-worker-title">添加工人</span>
+                <button class="modal-close" onclick="closeModal('modal-worker')">×</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="worker-id">
+                <div class="form-group">
+                    <label class="form-label">姓名 *</label>
+                    <input type="text" class="form-input" id="worker-name" placeholder="请输入姓名">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">日工资(元) *</label>
+                    <input type="number" class="form-input" id="worker-wage" placeholder="请输入日工资" min="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">所属工地 *</label>
+                    <select class="form-select" id="worker-site">
+                        <option value="">请选择工地</option>
+                    </select>
+                </div>
+                <div class="form-group" id="transfer-group" style="display:none;">
+                    <label class="form-label">调动到新工地</label>
+                    <select class="form-select" id="worker-transfer-site">
+                        <option value="">不调动</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">备注</label>
+                    <input type="text" class="form-input" id="worker-note" placeholder="可选备注">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline flex-1" onclick="closeModal('modal-worker')">取消</button>
+                <button class="btn btn-primary flex-1" onclick="saveWorker()">保存</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal: 添加工地 -->
+    <div class="modal-overlay" id="modal-site">
+        <div class="modal">
+            <div class="modal-header">
+                <span id="modal-site-title">添加工地</span>
+                <button class="modal-close" onclick="closeModal('modal-site')">×</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="site-id">
+                <div class="form-group">
+                    <label class="form-label">工地名称 *</label>
+                    <input type="text" class="form-input" id="site-name" placeholder="请输入工地名称">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">地址</label>
+                    <input type="text" class="form-input" id="site-address" placeholder="请输入地址">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline flex-1" onclick="closeModal('modal-site')">取消</button>
+                <button class="btn btn-primary flex-1" onclick="saveSite()">保存</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal: 批量导入 -->
+    <div class="modal-overlay" id="modal-import">
+        <div class="modal">
+            <div class="modal-header">
+                <span>批量导入工人</span>
+                <button class="modal-close" onclick="closeModal('modal-import')">×</button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-10">格式：<strong>姓名,日工资,工地名</strong>（每行一个）</p>
+                <textarea class="import-area" id="import-text" placeholder="示例：
+张伟,300,阳光花园二期
+李强,280,阳光花园二期
+王建国,320,滨江商业中心"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline flex-1" onclick="closeModal('modal-import')">取消</button>
+                <button class="btn btn-primary flex-1" onclick="importWorkers()">导入</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal: 调度记录 -->
+    <div class="modal-overlay" id="modal-transfer">
+        <div class="modal">
+            <div class="modal-header">
+                <span>调度记录</span>
+                <button class="modal-close" onclick="closeModal('modal-transfer')">×</button>
+            </div>
+            <div class="modal-body" id="transfer-history"></div>
+        </div>
+    </div>
+
+    <script>
+        // ========== SQL建表语句 ==========
+        const SQL_INIT = `-- 工地表
+CREATE TABLE IF NOT EXISTS sites (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  address TEXT,
+  status TEXT DEFAULT 'active',
+  created_at TEXT NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 工人表
+CREATE TABLE IF NOT EXISTS workers (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  daily_wage INTEGER NOT NULL DEFAULT 0,
+  current_site_id TEXT,
+  created_at TEXT NOT NULL,
+  deleted BOOLEAN DEFAULT false,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 调度记录表
+CREATE TABLE IF NOT EXISTS transfers (
+  id TEXT PRIMARY KEY,
+  worker_id TEXT NOT NULL,
+  from_site_id TEXT,
+  to_site_id TEXT NOT NULL,
+  date TEXT NOT NULL,
+  note TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 考勤记录表
+CREATE TABLE IF NOT EXISTS records (
+  id TEXT PRIMARY KEY,
+  date TEXT NOT NULL,
+  worker_id TEXT NOT NULL,
+  site_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  check_in TEXT,
+  check_out TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 开启Realtime
+ALTER PUBLICATION supabase_realtime ADD TABLE sites;
+ALTER PUBLICATION supabase_realtime ADD TABLE workers;
+ALTER PUBLICATION supabase_realtime ADD TABLE transfers;
+ALTER PUBLICATION supabase_realtime ADD TABLE records;`;
+
+        // ========== 工具函数 ==========
+        function getLocalDateStr(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+        
+        function getLocalTimeStr(date) {
+            const h = String(date.getHours()).padStart(2, '0');
+            const m = String(date.getMinutes()).padStart(2, '0');
+            return `${h}:${m}`;
+        }
+        
+        function nowISO() {
+            return new Date().toISOString();
+        }
+        
+        function generateId(prefix) {
+            return `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        }
+        
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            const div = document.createElement('div');
+            div.textContent = String(str);
+            return div.innerHTML;
+        }
+        
+        function showToast(message) {
+            const existing = document.querySelector('.toast');
+            if (existing) existing.remove();
+            
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => toast.remove(), 3000);
+        }
+        
+        // ========== 数据存储 ==========
+        const STORAGE_KEY = 'construction_attendance_v1';
+        
+        function loadData() {
+            const data = localStorage.getItem(STORAGE_KEY);
+            if (data) {
+                return JSON.parse(data);
+            }
+            return getDefaultData();
+        }
+        
+        function saveData(data) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        }
+        
+        function getDefaultData() {
+            return {
+                sites: [
+                    { id: 'site_1', name: '阳光花园二期', address: '城东新区阳光路88号', status: 'active', createdAt: '2024-01-01', updatedAt: nowISO() },
+                    { id: 'site_2', name: '滨江商业中心', address: '滨江大道128号', status: 'active', createdAt: '2024-01-01', updatedAt: nowISO() }
+                ],
+                workers: [
+                    { id: 'w_1', name: '张伟', dailyWage: 300, currentSiteId: 'site_1', createdAt: '2024-01-01', deleted: false, updatedAt: nowISO() },
+                    { id: 'w_2', name: '李强', dailyWage: 280, currentSiteId: 'site_1', createdAt: '2024-01-01', deleted: false, updatedAt: nowISO() },
+                    { id: 'w_3', name: '王建国', dailyWage: 320, currentSiteId: 'site_2', createdAt: '2024-01-01', deleted: false, updatedAt: nowISO() },
+                    { id: 'w_4', name: '赵铁柱', dailyWage: 300, currentSiteId: 'site_2', createdAt: '2024-01-01', deleted: false, updatedAt: nowISO() },
+                    { id: 'w_5', name: '刘大勇', dailyWage: 260, currentSiteId: 'site_2', createdAt: '2024-01-01', deleted: false, updatedAt: nowISO() }
+                ],
+                transfers: [],
+                records: []
+            };
+        }
+        
+        // ========== 同步管理器 ==========
+        class SyncManager {
+            constructor() {
+                this.client = null;
+                this.connected = false;
+                this.connecting = false;
+                this.subscription = null;
+                this.isRemoteChange = false;
+                
+                // 加载配置
+                this.loadConfig();
+            }
+            
+            loadConfig() {
+                const config = localStorage.getItem('supabase_config');
+                if (config) {
+                    try {
+                        const { url, key } = JSON.parse(config);
+                        document.getElementById('supabase-url').value = url || '';
+                        document.getElementById('supabase-key').value = key || '';
+                    } catch (e) {
+                        console.error('加载Supabase配置失败', e);
+                    }
+                }
+            }
+            
+            saveConfig(url, key) {
+                localStorage.setItem('supabase_config', JSON.stringify({ url, key }));
+            }
+            
+            updateUI() {
+                const dot = document.getElementById('sync-dot');
+                const text = document.getElementById('sync-text');
+                const indicator = document.getElementById('conn-indicator');
+                const status = document.getElementById('conn-status');
+                const btnConnect = document.getElementById('btn-connect');
+                const btnDisconnect = document.getElementById('btn-disconnect');
+                
+                dot.className = 'sync-dot';
+                indicator.className = 'status-indicator';
+                
+                if (this.connecting) {
+                    dot.classList.add('connecting');
+                    text.textContent = '连接中...';
+                    indicator.classList.add('connecting');
+                    status.textContent = '连接中...';
+                    btnConnect.disabled = true;
+                    btnDisconnect.disabled = true;
+                } else if (this.connected) {
+                    dot.classList.add('connected');
+                    text.textContent = '已同步';
+                    indicator.classList.add('connected');
+                    status.textContent = '已连接';
+                    btnConnect.disabled = true;
+                    btnDisconnect.disabled = false;
+                } else {
+                    text.textContent = '本地模式';
+                    status.textContent = '未连接';
+                    btnConnect.disabled = false;
+                    btnDisconnect.disabled = true;
+                }
+            }
+            
+            async connect() {
+                const url = document.getElementById('supabase-url').value.trim();
+                const key = document.getElementById('supabase-key').value.trim();
+                
+                if (!url || !key) {
+                    showToast('请输入完整的Supabase配置');
+                    return;
+                }
+                
+                if (!window.supabase) {
+                    showToast('Supabase库未加载，请检查网络');
+                    return;
+                }
+                
+                this.connecting = true;
+                this.updateUI();
+                
+                try {
+                    this.client = window.supabase.createClient(url, key);
+                    
+                    // 测试连接
+                    const { error } = await this.client.from('sites').select('id').limit(1);
+                    if (error) throw error;
+                    
+                    this.connected = true;
+                    this.saveConfig(url, key);
+                    
+                    // 订阅实时变更
+                    this.subscribeChanges();
+                    
+                    showToast('Supabase连接成功！');
+                    this.updateLastSyncTime();
+                } catch (e) {
+                    console.error('连接失败', e);
+                    showToast('连接失败: ' + (e.message || '请检查配置'));
+                    this.disconnect();
+                } finally {
+                    this.connecting = false;
+                    this.updateUI();
+                }
+            }
+            
+            disconnect() {
+                if (this.subscription) {
+                    this.subscription.unsubscribe();
+                    this.subscription = null;
+                }
+                this.client = null;
+                this.connected = false;
+                this.updateUI();
+                showToast('已断开连接');
+            }
+            
+            subscribeChanges() {
+                if (!this.client || !this.connected) return;
+                
+                this.subscription = this.client.channel('attendance-changes')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'sites' }, (payload) => {
+                        this.handleRemoteChange('sites', payload);
+                    })
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'workers' }, (payload) => {
+                        this.handleRemoteChange('workers', payload);
+                    })
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'transfers' }, (payload) => {
+                        this.handleRemoteChange('transfers', payload);
+                    })
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'records' }, (payload) => {
+                        this.handleRemoteChange('records', payload);
+                    })
+                    .subscribe();
+            }
+            
+            handleRemoteChange(table, payload) {
+                if (this.isRemoteChange) return;
+                
+                this.isRemoteChange = true;
+                
+                try {
+                    const { eventType, new: newRecord, old: oldRecord } = payload;
+                    
+                    if (eventType === 'INSERT' || eventType === 'UPDATE') {
+                        this.upsertLocal(table, newRecord);
+                    } else if (eventType === 'DELETE') {
+                        this.deleteLocal(table, oldRecord);
+                    }
+                    
+                    refreshAll();
+                } finally {
+                    setTimeout(() => {
+                        this.isRemoteChange = false;
+                    }, 100);
+                }
+            }
+            
+            upsertLocal(table, record) {
+                // 将云端字段名转换为本地字段名
+                const mappedRecord = this.mapToLocal(table, record);
+                
+                const arr = appData[table];
+                const index = arr.findIndex(item => item.id === mappedRecord.id);
+                
+                if (index >= 0) {
+                    // 比较updated_at，只在云端更新时覆盖
+                    const local = arr[index];
+                    const localTime = local.updatedAt ? new Date(local.updatedAt) : new Date(0);
+                    const remoteTime = new Date(mappedRecord.updatedAt);
+                    
+                    if (remoteTime > localTime) {
+                        arr[index] = mappedRecord;
+                    }
+                } else {
+                    arr.push(mappedRecord);
+                }
+                
+                saveData(appData);
+            }
+            
+            deleteLocal(table, record) {
+                const mappedRecord = this.mapToLocal(table, record);
+                
+                if (table === 'workers') {
+                    const worker = appData.workers.find(w => w.id === mappedRecord.id);
+                    if (worker) {
+                        worker.deleted = true;
+                    }
+                } else {
+                    const index = appData[table].findIndex(item => item.id === mappedRecord.id);
+                    if (index >= 0) {
+                        appData[table].splice(index, 1);
+                    }
+                }
+                
+                saveData(appData);
+            }
+            
+            // 云端字段名 -> 本地字段名
+            mapToLocal(table, record) {
+                const mapped = { ...record };
+                
+                switch (table) {
+                    case 'sites':
+                        mapped.createdAt = record.created_at;
+                        mapped.updatedAt = record.updated_at;
+                        delete mapped.created_at;
+                        delete mapped.updated_at;
+                        break;
+                    case 'workers':
+                        mapped.createdAt = record.created_at;
+                        mapped.currentSiteId = record.current_site_id;
+                        mapped.dailyWage = record.daily_wage;
+                        delete mapped.created_at;
+                        delete mapped.current_site_id;
+                        delete mapped.daily_wage;
+                        break;
+                    case 'transfers':
+                        mapped.fromSiteId = record.from_site_id;
+                        mapped.toSiteId = record.to_site_id;
+                        mapped.workerId = record.worker_id;
+                        delete mapped.from_site_id;
+                        delete mapped.to_site_id;
+                        delete mapped.worker_id;
+                        break;
+                    case 'records':
+                        mapped.workerId = record.worker_id;
+                        mapped.siteId = record.site_id;
+                        mapped.checkIn = record.check_in;
+                        mapped.checkOut = record.check_out;
+                        delete mapped.worker_id;
+                        delete mapped.site_id;
+                        delete mapped.check_in;
+                        delete mapped.check_out;
+                        break;
+                }
+                
+                if (mapped.updated_at) {
+                    mapped.updatedAt = mapped.updated_at;
+                    delete mapped.updated_at;
+                }
+                
+                return mapped;
+            }
+            
+            // 本地字段名 -> 云端字段名
+            mapToRemote(table, record) {
+                const mapped = { ...record };
+                
+                switch (table) {
+                    case 'sites':
+                        mapped.created_at = record.createdAt;
+                        mapped.updated_at = record.updatedAt || nowISO();
+                        delete mapped.createdAt;
+                        delete mapped.updatedAt;
+                        break;
+                    case 'workers':
+                        mapped.created_at = record.createdAt;
+                        mapped.current_site_id = record.currentSiteId;
+                        mapped.daily_wage = record.dailyWage;
+                        delete mapped.createdAt;
+                        delete mapped.currentSiteId;
+                        delete mapped.dailyWage;
+                        break;
+                    case 'transfers':
+                        mapped.from_site_id = record.fromSiteId;
+                        mapped.to_site_id = record.toSiteId;
+                        mapped.worker_id = record.workerId;
+                        delete mapped.fromSiteId;
+                        delete mapped.toSiteId;
+                        delete mapped.workerId;
+                        break;
+                    case 'records':
+                        mapped.worker_id = record.workerId;
+                        mapped.site_id = record.siteId;
+                        mapped.check_in = record.checkIn;
+                        mapped.check_out = record.checkOut;
+                        delete mapped.workerId;
+                        delete mapped.siteId;
+                        delete mapped.checkIn;
+                        delete mapped.checkOut;
+                        break;
+                }
+                
+                return mapped;
+            }
+            
+            async saveToCloud(table, data) {
+                if (!this.connected || !this.client) return;
+                
+                try {
+                    const remoteData = Array.isArray(data) 
+                        ? data.map(item => this.mapToRemote(table, item))
+                        : [this.mapToRemote(table, data)];
+                    
+                    await this.client.from(table).upsert(remoteData, { onConflict: 'id' });
+                    this.updateLastSyncTime();
+                } catch (e) {
+                    console.error(`同步${table}失败`, e);
+                }
+            }
+            
+            async deleteFromCloud(table, id) {
+                if (!this.connected || !this.client) return;
+                
+                try {
+                    await this.client.from(table).delete().eq('id', id);
+                } catch (e) {
+                    console.error(`删除${table}失败`, e);
+                }
+            }
+            
+            async uploadToCloud() {
+                if (!this.connected) {
+                    showToast('请先连接Supabase');
+                    return;
+                }
+                
+                showToast('正在上传数据...');
+                
+                try {
+                    const tables = ['sites', 'workers', 'transfers', 'records'];
+                    
+                    for (const table of tables) {
+                        const data = appData[table];
+                        if (data && data.length > 0) {
+                            const remoteData = data.map(item => this.mapToRemote(table, item));
+                            await this.client.from(table).upsert(remoteData, { onConflict: 'id' });
+                        }
+                    }
+                    
+                    this.updateLastSyncTime();
+                    showToast('上传成功！');
+                } catch (e) {
+                    console.error('上传失败', e);
+                    showToast('上传失败: ' + (e.message || '未知错误'));
+                }
+            }
+            
+            async pullFromCloud() {
+                if (!this.connected) {
+                    showToast('请先连接Supabase');
+                    return;
+                }
+                
+                showToast('正在拉取数据...');
+                
+                try {
+                    const tables = ['sites', 'workers', 'transfers', 'records'];
+                    
+                    for (const table of tables) {
+                        const { data, error } = await this.client.from(table).select('*');
+                        if (error) throw error;
+                        
+                        if (data && data.length > 0) {
+                            appData[table] = data.map(item => this.mapToLocal(table, item));
+                        }
+                    }
+                    
+                    saveData(appData);
+                    refreshAll();
+                    this.updateLastSyncTime();
+                    showToast('拉取成功！');
+                } catch (e) {
+                    console.error('拉取失败', e);
+                    showToast('拉取失败: ' + (e.message || '未知错误'));
+                }
+            }
+            
+            async mergeData() {
+                if (!this.connected) {
+                    showToast('请先连接Supabase');
+                    return;
+                }
+                
+                showToast('正在合并数据...');
+                
+                try {
+                    const tables = ['sites', 'workers', 'transfers', 'records'];
+                    
+                    for (const table of tables) {
+                        const { data: remoteData } = await this.client.from(table).select('*');
+                        
+                        if (remoteData && remoteData.length > 0) {
+                            const localArr = appData[table] || [];
+                            const remoteArr = remoteData.map(item => this.mapToLocal(table, item));
+                            
+                            // 合并
+                            const merged = this.mergeByUpdatedAt(localArr, remoteArr);
+                            appData[table] = merged;
+                            
+                            // 写回云端
+                            const toUpload = merged.map(item => this.mapToRemote(table, item));
+                            await this.client.from(table).upsert(toUpload, { onConflict: 'id' });
+                        }
+                    }
+                    
+                    saveData(appData);
+                    refreshAll();
+                    this.updateLastSyncTime();
+                    showToast('合并完成！');
+                } catch (e) {
+                    console.error('合并失败', e);
+                    showToast('合并失败: ' + (e.message || '未知错误'));
+                }
+            }
+            
+            mergeByUpdatedAt(localArr, remoteArr) {
+                const map = new Map();
+                
+                // 先放本地数据
+                localArr.forEach(item => {
+                    if (item.id) map.set(item.id, item);
+                });
+                
+                // 远程数据，如果updated_at比本地新则覆盖
+                remoteArr.forEach(item => {
+                    if (!item.id) return;
+                    
+                    const existing = map.get(item.id);
+                    const existingTime = existing && existing.updatedAt ? new Date(existing.updatedAt) : new Date(0);
+                    const remoteTime = item.updatedAt ? new Date(item.updatedAt) : new Date(0);
+                    
+                    if (!existing || remoteTime > existingTime) {
+                        map.set(item.id, item);
+                    }
+                });
+                
+                return Array.from(map.values());
+            }
+            
+            updateLastSyncTime() {
+                const time = new Date().toLocaleString('zh-CN');
+                localStorage.setItem('last_sync_time', time);
+                document.getElementById('last-sync-time').textContent = '最后同步：' + time;
+            }
+        }
+        
+        // ========== 全局状态 ==========
+        let appData = loadData();
+        let currentMonth = new Date();
+        let currentSiteId = '';
+        const syncManager = new SyncManager();
+        
+        // ========== 初始化 ==========
+        document.addEventListener('DOMContentLoaded', function() {
+            // 显示SQL
+            document.getElementById('sql-area').textContent = SQL_INIT;
+            
+            // 显示最后同步时间
+            const lastSync = localStorage.getItem('last_sync_time');
+            if (lastSync) {
+                document.getElementById('last-sync-time').textContent = '最后同步：' + lastSync;
+            }
+            
+            // 检查备份提醒
+            checkBackupReminder();
+            
+            initNavigation();
+            initEventListeners();
+            refreshAll();
+            
+            // 自动连接
+            const config = localStorage.getItem('supabase_config');
+            if (config) {
+                try {
+                    const { url, key } = JSON.parse(config);
+                    if (url && key) {
+                        syncManager.connect();
+                    }
+                } catch (e) {}
+            }
+        });
+        
+        function initNavigation() {
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const tabId = this.dataset.tab;
+                    
+                    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+                    document.getElementById(tabId).classList.add('active');
+                });
+            });
+        }
+        
+        function initEventListeners() {
+            // 考勤工地选择
+            document.getElementById('attendance-site-select').addEventListener('change', function() {
+                currentSiteId = this.value;
+                renderAttendanceList();
+            });
+            
+            // 一键全员出勤
+            document.getElementById('btn-all-present').addEventListener('click', allPresent);
+            
+            // 月份导航
+            document.getElementById('prev-month').addEventListener('click', function() {
+                currentMonth.setMonth(currentMonth.getMonth() - 1);
+                renderStats();
+            });
+            
+            document.getElementById('next-month').addEventListener('click', function() {
+                currentMonth.setMonth(currentMonth.getMonth() + 1);
+                renderStats();
+            });
+            
+            // 统计工地选择
+            document.getElementById('stats-site-select').addEventListener('change', renderStats);
+            
+            // 添加工人
+            document.getElementById('btn-add-worker').addEventListener('click', function() {
+                openWorkerModal();
+            });
+            
+            // 批量导入
+            document.getElementById('btn-import-workers').addEventListener('click', function() {
+                openModal('modal-import');
+            });
+            
+            // 添加工地
+            document.getElementById('btn-add-site').addEventListener('click', function() {
+                openSiteModal();
+            });
+            
+            // 导出Word
+            document.getElementById('btn-export-csv').addEventListener('click', exportMonthDocx);
+        }
+        
+        function refreshAll() {
+            renderSiteSelects();
+            renderAttendanceList();
+            renderStats();
+            renderWorkersList();
+            renderSitesList();
+        }
+        
+        // ========== 工地选择下拉 ==========
+        function renderSiteSelects() {
+            const activeSites = appData.sites.filter(s => s.status === 'active');
+            const allSites = appData.sites;
+            
+            const selects = [
+                'attendance-site-select',
+                'stats-site-select',
+                'worker-site',
+                'worker-transfer-site'
+            ];
+            
+            selects.forEach(selectId => {
+                const select = document.getElementById(selectId);
+                const isIncludeAll = selectId === 'stats-site-select';
+                const isTransfer = selectId === 'worker-transfer-site';
+                
+                let options = '';
+                
+                if (isIncludeAll) {
+                    options = '<option value="">全部工地</option>';
+                } else if (!isTransfer) {
+                    options = '<option value="">请选择工地...</option>';
+                } else {
+                    options = '<option value="">不调动</option>';
+                }
+                
+                const sitesToShow = (isIncludeAll || isTransfer) ? allSites : activeSites;
+                
+                sitesToShow.forEach(site => {
+                    options += `<option value="${escapeHtml(site.id)}">${escapeHtml(site.name)}</option>`;
+                });
+                
+                select.innerHTML = options;
+            });
+        }
+        
+        // ========== Tab1: 考勤录入 ==========
+        function renderAttendanceList() {
+            const listEl = document.getElementById('attendance-list');
+            
+            if (!currentSiteId) {
+                listEl.innerHTML = '<div class="empty-state"><div class="icon">🏗️</div><p>请先选择工地</p></div>';
+                updateAttendanceStats();
+                return;
+            }
+            
+            const workers = appData.workers.filter(w => w.currentSiteId === currentSiteId && !w.deleted);
+            const today = getLocalDateStr(new Date());
+            
+            if (workers.length === 0) {
+                listEl.innerHTML = '<div class="empty-state"><div class="icon">👷</div><p>该工地暂无工人</p></div>';
+                updateAttendanceStats();
+                return;
+            }
+            
+            let html = '';
+            workers.forEach(worker => {
+                const record = appData.records.find(r => 
+                    r.workerId === worker.id && 
+                    r.date === today && 
+                    r.siteId === currentSiteId
+                );
+                
+                const status = record ? record.status : 'absent';
+                const checkIn = record ? record.checkIn : '';
+                const checkOut = record ? record.checkOut : '';
+                
+                html += `
+                <div class="worker-row" data-worker-id="${escapeHtml(worker.id)}">
+                    <div class="worker-info">
+                        <div class="worker-name">${escapeHtml(worker.name)}</div>
+                        <div class="worker-wage">日工资: ¥${worker.dailyWage}</div>
+                        <div class="time-display" id="time-display-${worker.id}">
+                            ${checkIn ? '上班: ' + escapeHtml(checkIn) : ''} 
+                            ${checkOut ? '下班: ' + escapeHtml(checkOut) : ''}
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="status-btn present ${status === 'present' ? 'active' : ''}" 
+                                onclick="setAttendance('${escapeHtml(worker.id)}', 'present')">✅出勤</button>
+                        <button class="status-btn absent ${status === 'absent' ? 'active' : ''}" 
+                                onclick="setAttendance('${escapeHtml(worker.id)}', 'absent')">❌缺勤</button>
+                        <button class="status-btn leave ${status === 'leave' ? 'active' : ''}" 
+                                onclick="setAttendance('${escapeHtml(worker.id)}', 'leave')">🏥请假</button>
+                    </div>
+                </div>
+                `;
+            });
+            
+            listEl.innerHTML = html;
+            updateAttendanceStats();
+        }
+        
+        function setAttendance(workerId, status) {
+            const today = getLocalDateStr(new Date());
+            const now = getLocalTimeStr(new Date());
+            
+            let record = appData.records.find(r => 
+                r.workerId === workerId && 
+                r.date === today && 
+                r.siteId === currentSiteId
+            );
+            
+            if (!record) {
+                record = {
+                    id: generateId('r'),
+                    date: today,
+                    workerId: workerId,
+                    siteId: currentSiteId,
+                    status: status,
+                    checkIn: status === 'present' ? now : null,
+                    checkOut: null,
+                    updatedAt: nowISO()
+                };
+                appData.records.push(record);
+            } else {
+                record.status = status;
+                record.updatedAt = nowISO();
+                if (status === 'present' && !record.checkIn) {
+                    record.checkIn = now;
+                }
+            }
+            
+            saveData(appData);
+            syncManager.saveToCloud('records', record);
+            
+            const row = document.querySelector(`[data-worker-id="${workerId}"]`);
+            if (row) {
+                row.querySelectorAll('.status-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.classList.contains(status)) {
+                        btn.classList.add('active');
+                    }
+                });
+                
+                const timeDisplay = document.getElementById(`time-display-${workerId}`);
+                if (timeDisplay) {
+                    if (record.checkIn) {
+                        timeDisplay.textContent = '上班: ' + record.checkIn;
+                    } else {
+                        timeDisplay.textContent = '';
+                    }
+                }
+            }
+            
+            updateAttendanceStats();
+        }
+        
+        function allPresent() {
+            if (!currentSiteId) {
+                alert('请先选择工地');
+                return;
+            }
+            
+            const workers = appData.workers.filter(w => w.currentSiteId === currentSiteId && !w.deleted);
+            const now = getLocalTimeStr(new Date());
+            const today = getLocalDateStr(new Date());
+            
+            workers.forEach(worker => {
+                let record = appData.records.find(r => 
+                    r.workerId === worker.id && 
+                    r.date === today && 
+                    r.siteId === currentSiteId
+                );
+                
+                if (!record) {
+                    record = {
+                        id: generateId('r'),
+                        date: today,
+                        workerId: worker.id,
+                        siteId: currentSiteId,
+                        status: 'present',
+                        checkIn: now,
+                        checkOut: null,
+                        updatedAt: nowISO()
+                    };
+                    appData.records.push(record);
+                } else {
+                    record.status = 'present';
+                    record.updatedAt = nowISO();
+                    if (!record.checkIn) {
+                        record.checkIn = now;
+                    }
+                }
+            });
+            
+            saveData(appData);
+            syncManager.saveToCloud('records', appData.records.filter(r => r.date === today && r.siteId === currentSiteId));
+            renderAttendanceList();
+        }
+        
+        function updateAttendanceStats() {
+            if (!currentSiteId) {
+                document.getElementById('stat-present').textContent = '0';
+                document.getElementById('stat-absent').textContent = '0';
+                document.getElementById('stat-leave').textContent = '0';
+                return;
+            }
+            
+            const today = getLocalDateStr(new Date());
+            const workers = appData.workers.filter(w => w.currentSiteId === currentSiteId && !w.deleted);
+            
+            let present = 0, absent = 0, leave = 0;
+            
+            workers.forEach(worker => {
+                const record = appData.records.find(r => 
+                    r.workerId === worker.id && 
+                    r.date === today && 
+                    r.siteId === currentSiteId
+                );
+                
+                if (record) {
+                    if (record.status === 'present') present++;
+                    else if (record.status === 'absent') absent++;
+                    else if (record.status === 'leave') leave++;
+                } else {
+                    absent++;
+                }
+            });
+            
+            document.getElementById('stat-present').textContent = present;
+            document.getElementById('stat-absent').textContent = absent;
+            document.getElementById('stat-leave').textContent = leave;
+        }
+        
+        // ========== Tab2: 月度统计 ==========
+        function renderStats() {
+            const year = currentMonth.getFullYear();
+            const month = currentMonth.getMonth() + 1;
+            const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+            
+            document.getElementById('month-display').textContent = `${year}年${month}月`;
+            
+            const selectedSite = document.getElementById('stats-site-select').value;
+            const tbody = document.getElementById('stats-tbody');
+            
+            let records = appData.records.filter(r => r.date.startsWith(monthStr));
+            
+            if (selectedSite) {
+                records = records.filter(r => r.siteId === selectedSite);
+            }
+            
+            const workerStats = {};
+            
+            records.forEach(r => {
+                if (!workerStats[r.workerId]) {
+                    workerStats[r.workerId] = {
+                        workerId: r.workerId,
+                        siteId: r.siteId,
+                        days: 0
+                    };
+                }
+                if (r.status === 'present') {
+                    workerStats[r.workerId].days++;
+                }
+            });
+            
+            let totalDays = 0;
+            let totalWage = 0;
+            let html = '';
+            
+            const workers = selectedSite 
+                ? appData.workers.filter(w => w.currentSiteId === selectedSite && !w.deleted)
+                : appData.workers.filter(w => !w.deleted);
+            
+            workers.forEach(worker => {
+                const stats = workerStats[worker.id] || { days: 0, siteId: worker.currentSiteId };
+                const wage = stats.days * worker.dailyWage;
+                totalDays += stats.days;
+                totalWage += wage;
+                
+                const site = appData.sites.find(s => s.id === stats.siteId);
+                const siteName = site ? site.name : '已调离';
+                
+                html += `
+                <tr>
+                    <td>${escapeHtml(worker.name)}</td>
+                    <td>¥${worker.dailyWage}</td>
+                    <td>${stats.days}天</td>
+                    <td class="money">¥${wage}</td>
+                </tr>
+                `;
+            });
+            
+            tbody.innerHTML = html || '<tr><td colspan="4" class="text-center">暂无数据</td></tr>';
+            
+            document.getElementById('total-days').textContent = totalDays;
+            document.getElementById('total-wage').textContent = '¥' + totalWage;
+            document.getElementById('total-workers').textContent = workers.length;
+        }
+        
+        // ========== Tab2: 月度统计 - 导出Word ==========
+        async function exportMonthDocx() {
+            const year = currentMonth.getFullYear();
+            const month = currentMonth.getMonth() + 1;
+            const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+            const selectedSite = document.getElementById('stats-site-select').value;
+            
+            // 获取工地名称
+            let siteName = '全部工地';
+            if (selectedSite) {
+                const site = appData.sites.find(s => s.id === selectedSite);
+                if (site) siteName = site.name;
+            }
+            
+            // 获取考勤记录
+            let records = appData.records.filter(r => r.date.startsWith(monthStr));
+            if (selectedSite) {
+                records = records.filter(r => r.siteId === selectedSite);
+            }
+            
+            // 统计每个工人的出勤天数
+            const workerStats = {};
+            records.forEach(r => {
+                if (!workerStats[r.workerId]) {
+                    workerStats[r.workerId] = { days: 0 };
+                }
+                if (r.status === 'present') {
+                    workerStats[r.workerId].days++;
+                }
+            });
+            
+            // 获取工人列表
+            const workers = selectedSite 
+                ? appData.workers.filter(w => w.currentSiteId === selectedSite && !w.deleted)
+                : appData.workers.filter(w => !w.deleted);
+            
+            // 计算汇总
+            let totalDays = 0;
+            let totalWage = 0;
+            
+            const workerRows = [];
+            workers.forEach(w => {
+                const days = workerStats[w.id] ? workerStats[w.id].days : 0;
+                const wage = days * w.dailyWage;
+                totalDays += days;
+                totalWage += wage;
+                
+                workerRows.push({
+                    name: w.name,
+                    dailyWage: w.dailyWage,
+                    days: days,
+                    wage: wage
+                });
+            });
+            
+            // 创建表格行
+            const tableRows = [
+                // 表头
+                new docx.TableRow({
+                    children: [
+                        new docx.TableCell({
+                            children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "姓名", bold: true })], alignment: docx.AlignmentType.CENTER })],
+                            shading: { fill: "E0E0E0" }
+                        }),
+                        new docx.TableCell({
+                            children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "日工资", bold: true })], alignment: docx.AlignmentType.CENTER })],
+                            shading: { fill: "E0E0E0" }
+                        }),
+                        new docx.TableCell({
+                            children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "出勤天数", bold: true })], alignment: docx.AlignmentType.CENTER })],
+                            shading: { fill: "E0E0E0" }
+                        }),
+                        new docx.TableCell({
+                            children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "应发工资", bold: true })], alignment: docx.AlignmentType.CENTER })],
+                            shading: { fill: "E0E0E0" }
+                        }),
+                    ]
+                })
+            ];
+            
+            // 数据行
+            workerRows.forEach(row => {
+                tableRows.push(
+                    new docx.TableRow({
+                        children: [
+                            new docx.TableCell({
+                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: row.name })], alignment: docx.AlignmentType.CENTER })]
+                            }),
+                            new docx.TableCell({
+                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: `¥${row.dailyWage}` })], alignment: docx.AlignmentType.RIGHT })]
+                            }),
+                            new docx.TableCell({
+                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: `${row.days}天` })], alignment: docx.AlignmentType.CENTER })]
+                            }),
+                            new docx.TableCell({
+                                children: [new docx.Paragraph({ children: [new docx.TextRun({ text: `¥${row.wage}`, bold: true, color: "C00000" })], alignment: docx.AlignmentType.RIGHT })]
+                            }),
+                        ]
+                    })
+                );
+            });
+            
+            // 汇总行
+            tableRows.push(
+                new docx.TableRow({
+                    children: [
+                        new docx.TableCell({
+                            children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "合计", bold: true })], alignment: docx.AlignmentType.CENTER })],
+                            shading: { fill: "F0F0F0" }
+                        }),
+                        new docx.TableCell({
+                            children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "" })], alignment: docx.AlignmentType.RIGHT })]
+                        }),
+                        new docx.TableCell({
+                            children: [new docx.Paragraph({ children: [new docx.TextRun({ text: `${totalDays}天`, bold: true })], alignment: docx.AlignmentType.CENTER })],
+                            shading: { fill: "F0F0F0" }
+                        }),
+                        new docx.TableCell({
+                            children: [new docx.Paragraph({ children: [new docx.TextRun({ text: `¥${totalWage}`, bold: true, color: "C00000" })], alignment: docx.AlignmentType.RIGHT })],
+                            shading: { fill: "F0F0F0" }
+                        }),
+                    ]
+                })
+            );
+            
+            // 创建文档
+            const doc = new docx.Document({
+                sections: [{
+                    properties: {},
+                    children: [
+                        // 标题
+                        new docx.Paragraph({
+                            children: [new docx.TextRun({ text: "工地考勤月度汇总", bold: true, size: 36 })],
+                            alignment: docx.AlignmentType.CENTER,
+                            spacing: { after: 200 }
+                        }),
+                        // 副标题：工地名 + 年月
+                        new docx.Paragraph({
+                            children: [new docx.TextRun({ text: `${siteName} - ${year}年${month}月`, size: 28 })],
+                            alignment: docx.AlignmentType.CENTER,
+                            spacing: { after: 400 }
+                        }),
+                        // 表格
+                        new docx.Table({
+                            width: { size: 100, type: docx.WidthType.PERCENTAGE },
+                            rows: tableRows
+                        }),
+                        // 导出时间
+                        new docx.Paragraph({
+                            children: [new docx.TextRun({ text: `导出时间: ${new Date().toLocaleString('zh-CN')}`, size: 20, color: "888888" })],
+                            alignment: docx.AlignmentType.RIGHT,
+                            spacing: { before: 400 }
+                        }),
+                    ]
+                }]
+            });
+            
+            // 导出下载
+            const blob = await docx.Packer.toBlob(doc);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `考勤汇总_${siteName}_${year}年${month}月.docx`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showToast('Word文档已导出');
+        }
+        
+        // ========== Tab3: 人员管理 ==========
+        function renderWorkersList() {
+            const listEl = document.getElementById('workers-list');
+            const workers = appData.workers.filter(w => !w.deleted);
+            
+            const grouped = {};
+            appData.sites.forEach(site => {
+                grouped[site.id] = {
+                    site: site,
+                    workers: []
+                };
+            });
+            
+            workers.forEach(w => {
+                if (grouped[w.currentSiteId]) {
+                    grouped[w.currentSiteId].workers.push(w);
+                }
+            });
+            
+            let html = '';
+            Object.values(grouped).forEach(group => {
+                if (group.workers.length === 0 && group.site.status !== 'completed') return;
+                
+                const statusClass = group.site.status === 'completed' ? 'completed' : '';
+                
+                html += `
+                <div class="card ${statusClass}">
+                    <div class="card-title">
+                        🏗️ ${escapeHtml(group.site.name)}
+                        <span class="status-badge ${group.site.status === 'active' ? 'active' : 'completed'}">
+                            ${group.site.status === 'active' ? '在建' : '已完工'}
+                        </span>
+                    </div>
+                `;
+                
+                if (group.workers.length === 0) {
+                    html += '<p class="text-center" style="color:var(--text-secondary);padding:10px;">暂无工人</p>';
+                } else {
+                    group.workers.forEach(w => {
+                        html += `
+                        <div class="worker-row" style="margin-bottom:8px;">
+                            <div class="worker-info">
+                                <div class="worker-name">${escapeHtml(w.name)}</div>
+                                <div class="worker-wage">日工资: ¥${w.dailyWage}</div>
+                            </div>
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-outline" onclick="editWorker('${escapeHtml(w.id)}')">✏️编辑</button>
+                                <button class="btn btn-sm btn-info" onclick="showTransfer('${escapeHtml(w.id)}')">🔄调度</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteWorker('${escapeHtml(w.id)}')">🗑️</button>
+                            </div>
+                        </div>
+                        `;
+                    });
+                }
+                
+                html += '</div>';
+            });
+            
+            listEl.innerHTML = html || '<div class="empty-state"><div class="icon">👷</div><p>暂无工人</p></div>';
+        }
+        
+        function openWorkerModal(workerId = null) {
+            document.getElementById('worker-id').value = workerId || '';
+            document.getElementById('worker-name').value = '';
+            document.getElementById('worker-wage').value = '';
+            document.getElementById('worker-site').value = '';
+            document.getElementById('worker-note').value = '';
+            document.getElementById('transfer-group').style.display = 'none';
+            document.getElementById('modal-worker-title').textContent = workerId ? '编辑工人' : '添加工人';
+            
+            renderSiteSelects();
+            openModal('modal-worker');
+        }
+        
+        function editWorker(workerId) {
+            const worker = appData.workers.find(w => w.id === workerId);
+            if (!worker) return;
+            
+            document.getElementById('worker-id').value = workerId;
+            document.getElementById('worker-name').value = worker.name;
+            document.getElementById('worker-wage').value = worker.dailyWage;
+            document.getElementById('worker-site').value = worker.currentSiteId;
+            document.getElementById('worker-note').value = '';
+            document.getElementById('transfer-group').style.display = 'block';
+            document.getElementById('modal-worker-title').textContent = '编辑工人';
+            
+            renderSiteSelects();
+            document.getElementById('worker-site').value = worker.currentSiteId;
+            
+            openModal('modal-worker');
+        }
+        
+        function saveWorker() {
+            const id = document.getElementById('worker-id').value;
+            const name = document.getElementById('worker-name').value.trim();
+            const wage = parseFloat(document.getElementById('worker-wage').value);
+            const siteId = document.getElementById('worker-site').value;
+            const note = document.getElementById('worker-note').value.trim();
+            const transferSiteId = document.getElementById('worker-transfer-site').value;
+            
+            if (!name) {
+                alert('请输入姓名');
+                return;
+            }
+            if (isNaN(wage) || wage < 0) {
+                alert('请输入有效的日工资');
+                return;
+            }
+            if (!siteId) {
+                alert('请选择工地');
+                return;
+            }
+            
+            if (id) {
+                const worker = appData.workers.find(w => w.id === id);
+                if (worker) {
+                    worker.name = name;
+                    worker.dailyWage = wage;
+                    worker.updatedAt = nowISO();
+                    
+                    if (transferSiteId && transferSiteId !== worker.currentSiteId) {
+                        const today = getLocalDateStr(new Date());
+                        
+                        appData.transfers.push({
+                            id: generateId('t'),
+                            workerId: worker.id,
+                            fromSiteId: worker.currentSiteId,
+                            toSiteId: transferSiteId,
+                            date: today,
+                            note: note || '',
+                            updatedAt: nowISO()
+                        });
+                        
+                        syncManager.saveToCloud('transfers', appData.transfers[appData.transfers.length - 1]);
+                        worker.currentSiteId = transferSiteId;
+                    }
+                }
+            } else {
+                const newWorker = {
+                    id: generateId('w'),
+                    name: name,
+                    dailyWage: wage,
+                    currentSiteId: siteId,
+                    createdAt: getLocalDateStr(new Date()),
+                    deleted: false,
+                    updatedAt: nowISO()
+                };
+                appData.workers.push(newWorker);
+                syncManager.saveToCloud('workers', newWorker);
+            }
+            
+            saveData(appData);
+            syncManager.saveToCloud('workers', appData.workers);
+            closeModal('modal-worker');
+            refreshAll();
+        }
+        
+        function deleteWorker(workerId) {
+            if (!confirm('确定删除该工人吗？历史考勤记录将保留。')) return;
+            
+            const worker = appData.workers.find(w => w.id === workerId);
+            if (worker) {
+                worker.deleted = true;
+                worker.updatedAt = nowISO();
+                saveData(appData);
+                syncManager.saveToCloud('workers', worker);
+                refreshAll();
+            }
+        }
+        
+        function showTransfer(workerId) {
+            const worker = appData.workers.find(w => w.id === workerId);
+            if (!worker) return;
+            
+            const transfers = appData.transfers.filter(t => t.workerId === workerId);
+            const historyEl = document.getElementById('transfer-history');
+            
+            let html = `<p style="margin-bottom:15px;"><strong>${escapeHtml(worker.name)}</strong> 的调度记录</p>`;
+            
+            if (transfers.length === 0) {
+                html += '<p style="color:var(--text-secondary);">暂无调度记录</p>';
+            } else {
+                transfers.forEach(t => {
+                    const fromSite = appData.sites.find(s => s.id === t.fromSiteId);
+                    const toSite = appData.sites.find(s => s.id === t.toSiteId);
+                    
+                    html += `
+                    <div class="transfer-item">
+                        <div>${fromSite ? escapeHtml(fromSite.name) : '未知'} → ${toSite ? escapeHtml(toSite.name) : '未知'}</div>
+                        <div class="transfer-date">${escapeHtml(t.date)} ${escapeHtml(t.note || '')}</div>
+                    </div>
+                    `;
+                });
+            }
+            
+            html += `
+                <div class="form-group mt-15">
+                    <label class="form-label">调度到新工地</label>
+                    <select class="form-select" id="quick-transfer-site">
+                        <option value="">选择目标工地</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary btn-block mt-10" onclick="quickTransfer('${escapeHtml(workerId)}')">确认调度</button>
+            `;
+            
+            historyEl.innerHTML = html;
+            
+            const select = document.getElementById('quick-transfer-site');
+            appData.sites.filter(s => s.status === 'active').forEach(site => {
+                const option = document.createElement('option');
+                option.value = site.id;
+                option.textContent = site.name;
+                select.appendChild(option);
+            });
+            
+            openModal('modal-transfer');
+        }
+        
+        function quickTransfer(workerId) {
+            const targetSiteId = document.getElementById('quick-transfer-site').value;
+            if (!targetSiteId) {
+                alert('请选择目标工地');
+                return;
+            }
+            
+            const worker = appData.workers.find(w => w.id === workerId);
+            if (!worker || worker.currentSiteId === targetSiteId) return;
+            
+            const today = getLocalDateStr(new Date());
+            
+            const transfer = {
+                id: generateId('t'),
+                workerId: workerId,
+                fromSiteId: worker.currentSiteId,
+                toSiteId: targetSiteId,
+                date: today,
+                note: '',
+                updatedAt: nowISO()
+            };
+            
+            appData.transfers.push(transfer);
+            worker.currentSiteId = targetSiteId;
+            worker.updatedAt = nowISO();
+            
+            saveData(appData);
+            syncManager.saveToCloud('transfers', transfer);
+            syncManager.saveToCloud('workers', worker);
+            
+            closeModal('modal-transfer');
+            refreshAll();
+        }
+        
+        function importWorkers() {
+            const text = document.getElementById('import-text').value.trim();
+            if (!text) {
+                alert('请输入导入内容');
+                return;
+            }
+            
+            const lines = text.split('\n').filter(l => l.trim());
+            let success = 0, failed = 0;
+            const errors = [];
+            
+            lines.forEach((line, idx) => {
+                const parts = line.split(',').map(p => p.trim());
+                if (parts.length < 3) {
+                    failed++;
+                    errors.push(`第${idx + 1}行: 格式错误`);
+                    return;
+                }
+                
+                const [name, wageStr, siteName] = parts;
+                const wage = parseFloat(wageStr);
+                
+                if (!name) {
+                    failed++;
+                    errors.push(`第${idx + 1}行: 姓名为空`);
+                    return;
+                }
+                if (isNaN(wage) || wage < 0) {
+                    failed++;
+                    errors.push(`第${idx + 1}行: 工资无效`);
+                    return;
+                }
+                
+                const site = appData.sites.find(s => s.name === siteName);
+                if (!site) {
+                    failed++;
+                    errors.push(`第${idx + 1}行: 工地"${siteName}"不存在`);
+                    return;
+                }
+                
+                const newWorker = {
+                    id: generateId('w'),
+                    name: name,
+                    dailyWage: wage,
+                    currentSiteId: site.id,
+                    createdAt: getLocalDateStr(new Date()),
+                    deleted: false,
+                    updatedAt: nowISO()
+                };
+                appData.workers.push(newWorker);
+                success++;
+            });
+            
+            if (success > 0) {
+                saveData(appData);
+                syncManager.saveToCloud('workers', appData.workers);
+            }
+            
+            closeModal('modal-import');
+            document.getElementById('import-text').value = '';
+            refreshAll();
+            
+            if (failed > 0) {
+                alert(`导入完成: 成功${success}条, 失败${failed}条\n\n${errors.join('\n')}`);
+            } else {
+                alert(`成功导入 ${success} 名工人`);
+            }
+        }
+        
+        // ========== Tab4: 工地管理 ==========
+        function renderSitesList() {
+            const listEl = document.getElementById('sites-list');
+            
+            let html = '';
+            appData.sites.forEach(site => {
+                const workers = appData.workers.filter(w => w.currentSiteId === site.id && !w.deleted);
+                const workerCount = workers.length;
+                
+                const now = new Date();
+                const monthStr = getLocalDateStr(now).substring(0, 7);
+                const siteRecords = appData.records.filter(r => r.siteId === site.id && r.date.startsWith(monthStr) && r.status === 'present');
+                const attendanceRate = workerCount > 0 ? Math.round((siteRecords.length / workerCount) * 100) : 0;
+                
+                html += `
+                <div class="site-card ${site.status === 'completed' ? 'completed' : ''}">
+                    <div class="flex items-center">
+                        <div class="flex-1">
+                            <div class="site-name">${escapeHtml(site.name)}</div>
+                            <div class="site-address">📍 ${escapeHtml(site.address || '暂无地址')}</div>
+                        </div>
+                        <span class="status-badge ${site.status === 'active' ? 'active' : 'completed'}">
+                            ${site.status === 'active' ? '在建' : '已完工'}
+                        </span>
+                    </div>
+                    <div class="site-stats mt-10">
+                        <div class="site-stat">👷 ${workerCount}人</div>
+                        <div class="site-stat">📊 本月出勤率 ${attendanceRate}%</div>
+                    </div>
+                    <div class="btn-group mt-10">
+                        <button class="btn btn-sm btn-outline" onclick="editSite('${escapeHtml(site.id)}')">✏️编辑</button>
+                        <button class="btn btn-sm ${site.status === 'active' ? 'btn-info' : 'btn-success'}" 
+                                onclick="toggleSiteStatus('${escapeHtml(site.id)}')">
+                            ${site.status === 'active' ? '🔚 标记完工' : '🔨 重新开工'}
+                        </button>
+                    </div>
+                </div>
+                `;
+            });
+            
+            listEl.innerHTML = html || '<div class="empty-state"><div class="icon">🏗️</div><p>暂无工地</p></div>';
+        }
+        
+        function openSiteModal(siteId = null) {
+            if (siteId) {
+                const site = appData.sites.find(s => s.id === siteId);
+                if (site) {
+                    document.getElementById('site-id').value = siteId;
+                    document.getElementById('site-name').value = site.name;
+                    document.getElementById('site-address').value = site.address || '';
+                    document.getElementById('modal-site-title').textContent = '编辑工地';
+                }
+            } else {
+                document.getElementById('site-id').value = '';
+                document.getElementById('site-name').value = '';
+                document.getElementById('site-address').value = '';
+                document.getElementById('modal-site-title').textContent = '添加工地';
+            }
+            
+            openModal('modal-site');
+        }
+        
+        function editSite(siteId) {
+            openSiteModal(siteId);
+        }
+        
+        function saveSite() {
+            const id = document.getElementById('site-id').value;
+            const name = document.getElementById('site-name').value.trim();
+            const address = document.getElementById('site-address').value.trim();
+            
+            if (!name) {
+                alert('请输入工地名称');
+                return;
+            }
+            
+            if (id) {
+                const site = appData.sites.find(s => s.id === id);
+                if (site) {
+                    site.name = name;
+                    site.address = address;
+                    site.updatedAt = nowISO();
+                }
+            } else {
+                appData.sites.push({
+                    id: generateId('site'),
+                    name: name,
+                    address: address,
+                    status: 'active',
+                    createdAt: getLocalDateStr(new Date()),
+                    updatedAt: nowISO()
+                });
+            }
+            
+            saveData(appData);
+            syncManager.saveToCloud('sites', appData.sites);
+            closeModal('modal-site');
+            refreshAll();
+        }
+        
+        function toggleSiteStatus(siteId) {
+            const site = appData.sites.find(s => s.id === siteId);
+            if (site) {
+                site.status = site.status === 'active' ? 'completed' : 'active';
+                site.updatedAt = nowISO();
+                saveData(appData);
+                syncManager.saveToCloud('sites', site);
+                refreshAll();
+            }
+        }
+        
+        // ========== 设置页面功能 ==========
+        function copySQL() {
+            const sql = document.getElementById('sql-area').value;
+            navigator.clipboard.writeText(sql).then(() => {
+                showToast('SQL已复制到剪贴板');
+            }).catch(() => {
+                // Fallback
+                document.getElementById('sql-area').select();
+                document.execCommand('copy');
+                showToast('SQL已复制到剪贴板');
+            });
+        }
+        
+        // ========== 设置页面功能 - 导出全部数据(Word) ==========
+        async function exportAllData() {
+            // 工地列表
+            const sitesRows = [
+                new docx.TableRow({
+                    children: [
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "工地ID", bold: true })], alignment: docx.AlignmentType.CENTER })], shading: { fill: "E0E0E0" } }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "工地名称", bold: true })], alignment: docx.AlignmentType.CENTER })], shading: { fill: "E0E0E0" } }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "地址", bold: true })], alignment: docx.AlignmentType.CENTER })], shading: { fill: "E0E0E0" } }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "状态", bold: true })], alignment: docx.AlignmentType.CENTER })], shading: { fill: "E0E0E0" } }),
+                    ]
+                })
+            ];
+            appData.sites.forEach(site => {
+                sitesRows.push(new docx.TableRow({
+                    children: [
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: site.id, size: 18 })] })] }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: site.name, size: 18 })] })] }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: site.address || '', size: 18 })] })] }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: site.status === 'active' ? '在建' : '已完工', size: 18 })] })] }),
+                    ]
+                }));
+            });
+            
+            // 工人列表
+            const workersRows = [
+                new docx.TableRow({
+                    children: [
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "工人ID", bold: true })], alignment: docx.AlignmentType.CENTER })], shading: { fill: "E0E0E0" } }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "姓名", bold: true })], alignment: docx.AlignmentType.CENTER })], shading: { fill: "E0E0E0" } }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "日工资", bold: true })], alignment: docx.AlignmentType.CENTER })], shading: { fill: "E0E0E0" } }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "工地ID", bold: true })], alignment: docx.AlignmentType.CENTER })], shading: { fill: "E0E0E0" } }),
+                    ]
+                })
+            ];
+            appData.workers.filter(w => !w.deleted).forEach(w => {
+                workersRows.push(new docx.TableRow({
+                    children: [
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: w.id, size: 18 })] })] }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: w.name, size: 18 })] })] }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: `¥${w.dailyWage}`, size: 18 })] })] }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: w.currentSiteId || '', size: 18 })] })] }),
+                    ]
+                }));
+            });
+            
+            // 调度记录
+            const transfersRows = [
+                new docx.TableRow({
+                    children: [
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "记录ID", bold: true })], alignment: docx.AlignmentType.CENTER })], shading: { fill: "E0E0E0" } }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "工人ID", bold: true })], alignment: docx.AlignmentType.CENTER })], shading: { fill: "E0E0E0" } }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "调出工地", bold: true })], alignment: docx.AlignmentType.CENTER })], shading: { fill: "E0E0E0" } }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "调入工地", bold: true })], alignment: docx.AlignmentType.CENTER })], shading: { fill: "E0E0E0" } }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "日期", bold: true })], alignment: docx.AlignmentType.CENTER })], shading: { fill: "E0E0E0" } }),
+                    ]
+                })
+            ];
+            appData.transfers.forEach(t => {
+                const fromSite = appData.sites.find(s => s.id === t.fromSiteId);
+                const toSite = appData.sites.find(s => s.id === t.toSiteId);
+                transfersRows.push(new docx.TableRow({
+                    children: [
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: t.id, size: 18 })] })] }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: t.workerId, size: 18 })] })] }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: fromSite ? fromSite.name : '', size: 18 })] })] }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: toSite ? toSite.name : '', size: 18 })] })] }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: t.date, size: 18 })] })] }),
+                    ]
+                }));
+            });
+            
+            // 考勤记录
+            const recordsRows = [
+                new docx.TableRow({
+                    children: [
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "记录ID", bold: true })], alignment: docx.AlignmentType.CENTER })], shading: { fill: "E0E0E0" } }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "日期", bold: true })], alignment: docx.AlignmentType.CENTER })], shading: { fill: "E0E0E0" } }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "工人", bold: true })], alignment: docx.AlignmentType.CENTER })], shading: { fill: "E0E0E0" } }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "工地", bold: true })], alignment: docx.AlignmentType.CENTER })], shading: { fill: "E0E0E0" } }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: "状态", bold: true })], alignment: docx.AlignmentType.CENTER })], shading: { fill: "E0E0E0" } }),
+                    ]
+                })
+            ];
+            appData.records.forEach(r => {
+                const worker = appData.workers.find(w => w.id === r.workerId);
+                const site = appData.sites.find(s => s.id === r.siteId);
+                const statusMap = { present: '出勤', absent: '缺勤', leave: '请假' };
+                recordsRows.push(new docx.TableRow({
+                    children: [
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: r.id, size: 18 })] })] }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: r.date, size: 18 })] })] }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: worker ? worker.name : '', size: 18 })] })] }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: site ? site.name : '', size: 18 })] })] }),
+                        new docx.TableCell({ children: [new docx.Paragraph({ children: [new docx.TextRun({ text: statusMap[r.status] || r.status, size: 18 })] })] }),
+                    ]
+                }));
+            });
+            
+            // 创建文档
+            const doc = new docx.Document({
+                sections: [{
+                    properties: {},
+                    children: [
+                        // 标题
+                        new docx.Paragraph({
+                            children: [new docx.TextRun({ text: "工地考勤系统数据备份", bold: true, size: 36 })],
+                            alignment: docx.AlignmentType.CENTER,
+                            spacing: { after: 200 }
+                        }),
+                        new docx.Paragraph({
+                            children: [new docx.TextRun({ text: `导出时间: ${new Date().toLocaleString('zh-CN')}`, size: 20, color: "888888" })],
+                            alignment: docx.AlignmentType.CENTER,
+                            spacing: { after: 400 }
+                        }),
+                        
+                        // 工地列表
+                        new docx.Paragraph({
+                            children: [new docx.TextRun({ text: "一、工地列表", bold: true, size: 28 })],
+                            spacing: { before: 300, after: 200 }
+                        }),
+                        new docx.Table({
+                            width: { size: 100, type: docx.WidthType.PERCENTAGE },
+                            rows: sitesRows
+                        }),
+                        
+                        // 工人列表
+                        new docx.Paragraph({
+                            children: [new docx.TextRun({ text: "二、工人列表", bold: true, size: 28 })],
+                            spacing: { before: 400, after: 200 }
+                        }),
+                        new docx.Table({
+                            width: { size: 100, type: docx.WidthType.PERCENTAGE },
+                            rows: workersRows
+                        }),
+                        
+                        // 调度记录
+                        new docx.Paragraph({
+                            children: [new docx.TextRun({ text: "三、调度记录", bold: true, size: 28 })],
+                            spacing: { before: 400, after: 200 }
+                        }),
+                        new docx.Table({
+                            width: { size: 100, type: docx.WidthType.PERCENTAGE },
+                            rows: transfersRows
+                        }),
+                        
+                        // 考勤记录
+                        new docx.Paragraph({
+                            children: [new docx.TextRun({ text: "四、考勤记录", bold: true, size: 28 })],
+                            spacing: { before: 400, after: 200 }
+                        }),
+                        new docx.Table({
+                            width: { size: 100, type: docx.WidthType.PERCENTAGE },
+                            rows: recordsRows
+                        }),
+                    ]
+                }]
+            });
+            
+            // 导出下载
+            const blob = await docx.Packer.toBlob(doc);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `工地考勤全部数据_${getLocalDateStr(new Date())}.docx`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showToast('全部数据已导出');
+        }
+        
+        // 导出JSON备份
+        function exportAllDataJSON() {
+            const exportData = {
+                version: 1,
+                exportTime: new Date().toISOString(),
+                data: appData
+            };
+            
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `工地考勤备份_${getLocalDateStr(new Date())}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showToast('JSON备份已导出');
+        }
+        
+        function triggerImport() {
+            document.getElementById('import-file').click();
+        }
+        
+        // 根据文件类型处理导入
+        function handleImportFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const fileName = file.name.toLowerCase();
+            
+            if (fileName.endsWith('.docx')) {
+                importFromDocx(file);
+            } else if (fileName.endsWith('.json')) {
+                importAllDataJSON(file);
+            } else {
+                showToast('不支持的文件格式，请导入.docx或.json文件');
+            }
+            
+            // 清空input
+            event.target.value = '';
+        }
+        
+        // 导入JSON格式
+        function importAllDataJSON(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const content = JSON.parse(e.target.result);
+                    
+                    if (!content.data) {
+                        throw new Error('无效的备份文件格式');
+                    }
+                    
+                    // 合并数据
+                    const imported = content.data;
+                    
+                    if (imported.sites) {
+                        appData.sites = [...imported.sites];
+                    }
+                    if (imported.workers) {
+                        appData.workers = [...imported.workers];
+                    }
+                    if (imported.transfers) {
+                        appData.transfers = [...imported.transfers];
+                    }
+                    if (imported.records) {
+                        appData.records = [...imported.records];
+                    }
+                    
+                    saveData(appData);
+                    refreshAll();
+                    showToast('JSON数据导入成功');
+                } catch (err) {
+                    showToast('导入失败: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+        
+        // 从Docx导入数据
+        async function importFromDocx(file) {
+            try {
+                showToast('正在解析Word文档...');
+                
+                const arrayBuffer = await file.arrayBuffer();
+                const result = await mammoth.convertToHtml({ arrayBuffer });
+                const html = result.value;
+                
+                // 解析HTML中的表格
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const tables = doc.querySelectorAll('table');
+                
+                if (tables.length < 4) {
+                    // 如果表格不足4个，可能是旧格式，尝试简单导入
+                    showToast('Word文档格式不正确，需要包含4个表格');
+                    return;
+                }
+                
+                // 用于存储解析的数据
+                let importedSites = [];
+                let importedWorkers = [];
+                let importedTransfers = [];
+                let importedRecords = [];
+                
+                // 解析工地列表（第1个表格）
+                importedSites = parseTableToArray(tables[0], ['id', 'name', 'address', 'status'], {
+                    status: (v) => v.includes('完工') ? 'completed' : 'active'
+                });
+                
+                // 解析工人列表（第2个表格）
+                importedWorkers = parseTableToArray(tables[1], ['id', 'name', 'dailyWage', 'currentSiteId'], {
+                    dailyWage: (v) => parseInt(v.replace(/[^0-9]/g, '')) || 0
+                });
+                
+                // 解析调度记录（第3个表格）
+                importedTransfers = parseTableToArray(tables[2], ['id', 'workerId', 'fromSiteId', 'toSiteId', 'date']);
+                
+                // 解析考勤记录（第4个表格）
+                importedRecords = parseTableToArray(tables[3], ['id', 'date', 'workerId', 'siteId', 'status'], {
+                    status: (v) => {
+                        if (v.includes('出勤') || v.includes('在岗')) return 'present';
+                        if (v.includes('请假')) return 'leave';
+                        return 'absent';
+                    }
+                });
+                
+                // 确认导入
+                const confirmMsg = `即将导入:\n- 工地: ${importedSites.length} 条\n- 工人: ${importedWorkers.length} 条\n- 调度: ${importedTransfers.length} 条\n- 考勤: ${importedRecords.length} 条\n\n确认导入？这将覆盖现有数据。`;
+                
+                if (!confirm(confirmMsg)) {
+                    return;
+                }
+                
+                // 合并数据（使用导入数据替换现有数据）
+                appData.sites = importedSites.length > 0 ? importedSites : appData.sites;
+                appData.workers = importedWorkers.length > 0 ? importedWorkers : appData.workers;
+                appData.transfers = importedTransfers.length > 0 ? importedTransfers : appData.transfers;
+                appData.records = importedRecords.length > 0 ? importedRecords : appData.records;
+                
+                saveData(appData);
+                refreshAll();
+                showToast('Word数据导入成功');
+                
+            } catch (err) {
+                console.error('导入失败', err);
+                showToast('导入失败: ' + (err.message || '请检查文件格式'));
+            }
+        }
+        
+        // 解析表格为数组
+        function parseTableToArray(table, fields, transforms = {}) {
+            const result = [];
+            const rows = table.querySelectorAll('tr');
+            
+            if (rows.length < 2) return result;
+            
+            // 跳过表头，从第2行开始
+            for (let i = 1; i < rows.length; i++) {
+                const cells = rows[i].querySelectorAll('td');
+                if (cells.length < fields.length) continue;
+                
+                const item = {};
+                fields.forEach((field, index) => {
+                    let value = cells[index].textContent.trim();
+                    
+                    // 应用转换函数
+                    if (transforms[field] && typeof transforms[field] === 'function') {
+                        value = transforms[field](value);
+                    }
+                    
+                    item[field] = value;
+                });
+                
+                // 只添加有ID的记录
+                if (item.id) {
+                    result.push(item);
+                }
+            }
+            
+            return result;
+        }
+        
+        function checkBackupReminder() {
+            const lastDismissed = localStorage.getItem('backup_reminder_dismissed');
+            const today = getLocalDateStr(new Date());
+            const dayOfWeek = new Date().getDay();
+            
+            // 每周日提醒
+            if (dayOfWeek === 0 && lastDismissed !== today) {
+                document.getElementById('backup-reminder').style.display = 'flex';
+            }
+        }
+        
+        function dismissBackupReminder() {
+            localStorage.setItem('backup_reminder_dismissed', getLocalDateStr(new Date()));
+            document.getElementById('backup-reminder').style.display = 'none';
+        }
+        
+        // ========== 模态框 ==========
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+        }
+        
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+        
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    this.classList.remove('active');
+                }
+            });
+        });
+    </script>
+    
+    <!-- PWA 注册 -->
+    <script>
+    // Service Worker 注册
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('./sw.js').then(function(reg) {
+          console.log('Service Worker 注册成功');
+        }).catch(function(err) {
+          console.log('Service Worker 注册失败:', err);
+        });
+      });
+    }
+
+    // iOS PWA图标：动态生成PNG
+    (function setupAppleTouchIcon() {
+      // 检测是否为iOS Safari且非PWA模式
+      if (navigator.standalone === undefined && !window.matchMedia('(display-mode: standalone)').matches) {
+        var canvas = document.createElement('canvas');
+        canvas.width = 180;
+        canvas.height = 180;
+        var ctx = canvas.getContext('2d');
+        
+        // 橙色圆角背景
+        ctx.fillStyle = '#FF8C00';
+        ctx.beginPath();
+        ctx.roundRect(0, 0, 180, 180, 30);
+        ctx.fill();
+        
+        // 白色"考"字
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 90px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('考', 90, 90);
+        
+        var link = document.createElement('link');
+        link.rel = 'apple-touch-icon';
+        link.href = canvas.toDataURL('image/png');
+        document.head.appendChild(link);
+      }
+    })();
+
+    // PWA安装提示
+    var deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      deferredPrompt = e;
+      showInstallBanner();
+    });
+
+    function showInstallBanner() {
+      // 在页面顶部显示"添加到主屏幕"横幅
+      var banner = document.createElement('div');
+      banner.id = 'installBanner';
+      banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#FF8C00;color:white;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;z-index:9999;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,0.2);';
+      banner.innerHTML = '<span>📱 添加到主屏幕，像App一样使用</span><div><button id="installBtn" style="background:white;color:#FF8C00;border:none;padding:8px 16px;border-radius:6px;font-weight:600;margin-right:8px;cursor:pointer;">安装</button><button id="dismissBtn" style="background:transparent;color:white;border:1px solid rgba(255,255,255,0.5);padding:8px 12px;border-radius:6px;cursor:pointer;">稍后</button></div>';
+      document.body.appendChild(banner);
+      
+      document.getElementById('installBtn').addEventListener('click', function() {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          deferredPrompt.userChoice.then(function(choiceResult) {
+            deferredPrompt = null;
+            banner.remove();
+          });
+        }
+      });
+      
+      document.getElementById('dismissBtn').addEventListener('click', function() {
+        banner.remove();
+      });
+    }
+    </script>
+</body>
+</html>
